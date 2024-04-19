@@ -26,6 +26,7 @@ describe("NFT", function() {
       expect(await token.setPrice()).to.eq(500);
     });
   });
+
   describe("Mint with signature", function () {
     it("Should be possible to mint with correct signature!", async function () {
       const nonce = 1;
@@ -123,6 +124,109 @@ describe("NFT", function() {
       });
     });
     
+  });
+
+  describe("Mint", function () {
+    it("Should be possible to mint NFT!", async function () {
+      const amount = 2;
+      const tx = await token.connect(user1).mint(amount, {value: 200});
+      
+      await expect(tx).changeEtherBalances([user1, token], [-200, 200])
+      expect(await token.balanceOf(user1.address)).to.eq(amount);
+    });
+
+    describe("Reverts", function () {
+      it("Should not be possible to buy NFT if amount is incorrect!", async function () {
+        const amount = 4;
+
+        const tx = token.connect(user1).mint(amount, {value: 200});
+        await expect(tx).to.be.revertedWith("NFT: Incorrect amount");
+      });
+
+      it("Should not be possible to buy NFT if the payment is not enough! ", async function () {
+        const amount = 2;
+
+        const tx = token.connect(user1).mint(amount, {value: 199});
+        await expect(tx).to.be.revertedWith("NFT: Insufficient payment");
+      });
+
+      it("Should not be possible to buy NFT if token limit reached! ", async function () {
+        const amount = 2;
+        await token.setTokenId(999);
+
+        const tx = token.connect(user1).mint(amount, {value: 200});
+        await expect(tx).to.be.revertedWith("NFT: Token limit reached");
+      });
+    });
+
+    describe("Events", function () {
+      it("Should be emited with correct args!", async function () {
+        const amount = 2;
+
+        const tx = token.connect(user1).mint(amount, {value: 200});
+        await expect(tx)
+          .to.emit(token, "Minted")
+          .withArgs(1, user1.address)
+          .to.emit(token, "Minted")
+          .withArgs(2, user1.address)
+      });
+    });
+  });
+
+  describe("mintSet", function () {
+    it("Should be possible to mint set of NFTs!", async function () {
+      const tx = await token.connect(user1).mintSet({value: 600});
+      
+      await expect(tx).changeEtherBalances([user1, token], [-500, 500])
+      expect(await token.balanceOf(user1.address)).to.eq(6);
+    });
+
+    describe("Reverts", function () {
+      it("Should not be possible to buy NFT if the payment is not enough! ", async function () {
+        const tx = token.connect(user1).mintSet({value: 499});
+        await expect(tx).to.be.revertedWith("NFT: Insufficient payment");
+      });
+      
+      it("Should not be possible to buy NFT if the user already bought once!", async function () {
+        await token.connect(user1).mintSet({value: 500});
+        const tx = token.connect(user1).mintSet({value: 500});
+        await expect(tx).to.be.revertedWith("NFT: Already minted a set");
+      });
+
+      it("Should not be possible to buy NFT if token limit reached! ", async function () {
+        await token.setTokenId(995);
+
+        const tx = token.connect(user1).mintSet({value: 500});
+        await expect(tx).to.be.revertedWith("NFT: Token limit reached");
+      });
+    });
+
+    describe("Events", function () {
+      it("Should be emited with correct args!", async function () {
+        const tx = token.connect(user1).mintSet({value: 600});
+
+        await expect(tx)
+          .to.emit(token, "SetMinted")
+          .withArgs([1, 2, 3, 4, 5, 6], user1.address)
+      });
+    });
+  });
+
+  describe("Withdraw", function () {
+    it("Should be possible to withdraw funds!", async function () {
+      await token.connect(user1).mintSet({value: 600});
+      await token.connect(user1).mint(2, {value: 200});
+
+      const tx = await token.withdraw();
+      await expect(tx).changeEtherBalances([token, owner], [-700, 700])
+    });
+
+    describe("Reverts", function () {
+      it("Should not be possible to withdraw if the caller is not an owner!", async function () {
+        const tx = token.connect(user1).withdraw();
+        await expect(tx).to.be.revertedWithCustomError(token, "OwnableUnauthorizedAccount")
+      });
+    });
   });
 
 });
